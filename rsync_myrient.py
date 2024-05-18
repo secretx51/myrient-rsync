@@ -1,5 +1,5 @@
 import os
-import zipfile
+from zipfile import ZipFile
 from sh import rsync
 from tqdm import tqdm
 
@@ -55,16 +55,25 @@ def makeDownloadDir(download_dir):
     # Create download directory
     if not os.path.exists(download_dir):
         os.makedirs(download_dir)
-    return download_dir
+
+def setupPath(download_dir, folder, file_name):
+    # Path setup
+    game_name = os.path.splitext(file_name)[0]
+    path = os.path.join(download_dir, folder, game_name)
+    makeDownloadDir(path)
+    return path
 
 def unzipFile(zip_file, rom_path, file_name):
     # Unzip the file
-    with zipfile.ZipFile(zip_file, 'r') as zip_ref:
+    with ZipFile(zip_file, 'r') as zip_ref:
         zip_ref.extractall(rom_path)
     print("Unzipped:", file_name)
+    
+def deleteZip(zip_file, zip_path, file_name):
     if DELETE_ZIP:
         # Delete the original zip file
         os.remove(zip_file)
+        os.removedirs(zip_path)
         print("Deleted original zip file:", file_name)
 
 def download_files(filtered_files, rsync_url, download_dir):
@@ -72,13 +81,14 @@ def download_files(filtered_files, rsync_url, download_dir):
     for file_name in tqdm(filtered_files, desc="Downloading files", unit="file"):
         # Path setup
         file_url = os.path.join(rsync_url, file_name)
-        zip_path = makeDownloadDir(f'{download_dir}/zips')
+        zip_path = setupPath(download_dir, 'zips', file_name)
         zip_file = os.path.join(zip_path, file_name)
-        rom_path = makeDownloadDir(f'{download_dir}/roms')
+        rom_path = setupPath(download_dir, 'roms', file_name)
         # Rsync and unzip files
         rsync("-avz", file_url, zip_file)
         print("Downloaded:", file_name)
         unzipFile(zip_file, rom_path, file_name)
+        deleteZip(zip_file, zip_path, file_name)
 
 def downloadGames(system):
     rsync_url = f'{RSYNC_HOME}{system}/'
@@ -86,8 +96,8 @@ def downloadGames(system):
     files_list = get_rsync_files(rsync_url)
     # Filter files based on criteria
     filtered_files = apply_filters(files_list, GAME_WHITELIST, GAME_BLACKLIST)
+    # Download filtered files\
     download_dir = os.path.join(DOWNLOAD_DIR, system)
-    # Download filtered files
     download_files(filtered_files, rsync_url, download_dir)
 
 def main():
